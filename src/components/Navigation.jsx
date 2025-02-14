@@ -5,10 +5,6 @@ import useAuthStore from '../stores/authStore';
 function Navigation() {
   const { user, signOut } = useAuthStore();
 
-  const handleSignOut = () => {
-    signOut();
-  };
-
   return (
     <AppBar position="static">
       <Toolbar>
@@ -16,22 +12,18 @@ function Navigation() {
           <Button color="inherit" component={RouterLink} to="/">
             Home
           </Button>
+          <Button color="inherit" component={RouterLink} to="/dashboard">
+            Dashboard
+          </Button>
           <Button color="inherit" component={RouterLink} to="/contact">
             Contact
           </Button>
-          {user && (
-            <Button color="inherit" component={RouterLink} to="/dashboard">
-              Dashboard
-            </Button>
-          )}
         </Box>
         <Box>
           {user ? (
-            <>
-              <Button color="inherit" onClick={handleSignOut}>
-                Sign Out
-              </Button>
-            </>
+            <Button color="inherit" onClick={signOut}>
+              Sign Out
+            </Button>
           ) : (
             <>
               <Button color="inherit" component={RouterLink} to="/login">

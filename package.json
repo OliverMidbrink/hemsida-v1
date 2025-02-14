@@ -7,17 +7,19 @@
     "dev": "vite",
     "client": "vite",
     "server": "node server/index.js",
+    "python-server": "cd python-api && python3 -m uvicorn main:app --host localhost --port 8000 --reload",
     "build": "vite build",
     "preview": "vite preview",
     "setup": "node scripts/setup-dev.js",
-    "dev:all": "npm run setup && concurrently \"npm run server\" \"npm run client\"",
+    "dev:all": "concurrently \"npm run server\" \"npm run python-server\" \"npm run client\"",
+    "dev:js": "concurrently \"npm run server\" \"npm run client\"",
     "start": "node server/index.js"
   },
   "dependencies": {
-    "@emotion/react": "^11.11.3",
-    "@emotion/styled": "^11.11.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^5.15.7",
-    "@mui/material": "^5.15.7",
+    "@mui/material": "^5.16.14",
     "better-sqlite3": "^9.4.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -25,6 +27,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
+    "uuid": "^9.0.1",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
