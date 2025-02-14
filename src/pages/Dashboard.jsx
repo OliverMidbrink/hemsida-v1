@@ -60,6 +60,35 @@ function Dashboard() {
   const defaultTabIndex = (tabParam === "jobs") ? 1 : 0;
   const [currentTab, setCurrentTab] = useState(defaultTabIndex);
 
+  // Compute the selected ticker's color if analysis results are available.
+  let selectedTickerColor = "";
+  if (analysisResults && selectedTickerIndex !== null) {
+      const total = analysisResults.predictions.reduce((sum, p) => sum + p, 0);
+      const mean = total / analysisResults.predictions.length;
+      const variance = analysisResults.predictions.reduce((acc, p) => acc + Math.pow(p - mean, 2), 0) / analysisResults.predictions.length;
+      const std = Math.sqrt(variance);
+
+      const getBackgroundColor = (prediction) => {
+           if (std === 0) return "#ffffff";
+           let n = (prediction - mean) / std;
+           n = Math.max(-1, Math.min(1, n));
+           if (n >= 0) {
+               const factor = n; // factor from 0 to 1.
+               const r = Math.round(255 * (1 - factor) + 0 * factor);
+               const g = Math.round(255 * (1 - factor) + 128 * factor);
+               const b = Math.round(255 * (1 - factor) + 0 * factor);
+               return `rgb(${r}, ${g}, ${b})`;
+           } else {
+               const factor = -n;
+               const r = Math.round(255 * (1 - factor) + 150 * factor);
+               const g = Math.round(255 * (1 - factor) + 0 * factor);
+               const b = Math.round(255 * (1 - factor) + 0 * factor);
+               return `rgb(${r}, ${g}, ${b})`;
+           }
+      };
+      selectedTickerColor = getBackgroundColor(analysisResults.predictions[selectedTickerIndex]);
+  }
+
   useEffect(() => {
     const fetchAnalysis = async () => {
       setLoadingAnalysis(true);
@@ -93,10 +122,10 @@ function Dashboard() {
           {tabs.map((tab, index) => (
             <Tab key={index} label={tab.label} />
           ))}
-        </Tabs>
+          </Tabs>
 
         {/* TabPanel for Analysis */}
-        <TabPanel value={currentTab} index={0}>
+          <TabPanel value={currentTab} index={0}>
           {loadingAnalysis && <Typography>Loading analysis results...</Typography>}
           {errorAnalysis && <Typography color="error">{errorAnalysis}</Typography>}
           {analysisResults && (() => {
@@ -190,7 +219,7 @@ function Dashboard() {
             <Messages />
           </TabPanel>
         )}
-      </Paper>
+        </Paper>
 
       {/* Modal Dialog for Ticker Chart */}
       <Dialog
@@ -203,6 +232,7 @@ function Dashboard() {
           <TickerChart 
             ticker={analysisResults && selectedTickerIndex !== null ? analysisResults.tickers[selectedTickerIndex] : ""}
             prediction={analysisResults && selectedTickerIndex !== null ? analysisResults.predictions[selectedTickerIndex] : 0}
+            color={selectedTickerColor}
           />
           <IconButton
             onClick={() => {

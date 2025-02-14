@@ -9,7 +9,7 @@
     "server": "node server/index.js",
     "python-server": "cd python-api && python3 -m uvicorn main:app --host localhost --port 8000 --reload",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
     "setup": "node scripts/setup-dev.js",
     "dev:all": "concurrently \"npm run server\" \"npm run python-server\" \"npm run client\"",
     "dev:js": "concurrently \"npm run server\" \"npm run client\"",

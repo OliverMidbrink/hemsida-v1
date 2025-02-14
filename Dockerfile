@@ -1,27 +1,43 @@
-# Build stage
-FROM node:18
+# Use Node.js as base image
+FROM node:18-slim as builder
 
+# Install Python and required packages
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY python-api/requirements.txt ./python-api/
 
 # Install dependencies
 RUN npm install
+RUN pip3 install -r python-api/requirements.txt
 
-# Copy source code
+# Copy project files
 COPY . .
 
-# Build the client
+# Setup database and run migrations
+RUN npm run setup
+
+# Build frontend
 RUN npm run build
 
-# Environment variables
-ENV NODE_ENV=production
-ENV PORT=3001
-ENV VITE_API_URL=/api
+# Expose ports
+EXPOSE 8000
+EXPOSE 5173
 
-# Expose port
-EXPOSE 3001
+# Create start script
+RUN echo '#!/bin/bash\n\
+npm run python-server & \n\
+npm run preview' > ./start.sh
 
-# Start the server
-CMD ["npm", "start"] 
+RUN chmod +x ./start.sh
+
+# Start both servers
+CMD ["./start.sh"] 
