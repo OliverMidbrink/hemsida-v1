@@ -1,4 +1,3 @@
-
 import yfinance as yf
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -7,6 +6,11 @@ import infer
 import numpy as np
 import requests
 from datetime import datetime, timedelta
+from avanza_get import get_prices_from_tickers
+import logging
+
+logger = logging.getLogger(__name__)
+
 def infer_stocks(stocks):
     _stocks = " ".join(stocks)
 
@@ -30,19 +34,27 @@ def infer_stocks(stocks):
         #print(data)
     exit()"""
 
-    five_months_ago = (datetime.now() - timedelta(days=150)).strftime("%Y-%m-%d")
+    """five_months_ago = (datetime.now() - timedelta(days=150)).strftime("%Y-%m-%d")
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     data = yf.download(_stocks, start=five_months_ago, end=tomorrow)
     print("Data: ", data)
-    data = data["Open"]
+    data = data["Open"]"""
+    data = get_prices_from_tickers(stocks)
 
     preds = []
-    for ticker in data.columns:
-        ticker_data = data[ticker][-55:].values
-        print("Ticker: ", ticker, "Data: ", ticker_data)
-        preds.append(infer.infer(ticker_data))
+    for args in data:
+        try:
+            if args is None:
+                raise ValueError("Received None instead of stock data")
+            
+            ticker, opening_vals = args
+            ticker_data = opening_vals[-55:]
+            preds.append(infer.infer(ticker_data))
+        except Exception as e:
+            logger.error(f"Error in infer_stocks: {str(e)}")
+            preds.append(None)
 
-    return preds, data.tail(1)
+    return preds
 
 
 if __name__ == "__main__":

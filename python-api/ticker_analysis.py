@@ -15,7 +15,6 @@ def get_latest_analysis(tickers_file_path="tickers_test.txt"):
     tickers = []
     preds = []
     tail = None
-
     
     # Check if today is a weekend
     if today.weekday() >= 5:
@@ -47,13 +46,15 @@ def get_latest_analysis(tickers_file_path="tickers_test.txt"):
     # Run inference if today's data isn't available
     if not os.path.exists(latest_analysis_file_path) or file_date != today:
         #print(f"Running new analysis for {today}")
-        preds, tail = infer_stocks.infer_stocks(tickers)
+        #tickers = ["ADFPL"]+tickers[:3]
+        preds = infer_stocks.infer_stocks(tickers)
         results_df = pd.DataFrame({
             'Date': [today] * len(tickers),
             'Ticker': tickers,
             'Prediction': preds,
-            'Tail': "No_tail"
         })
+        # Filter out rows where Prediction is None
+        results_df = results_df.dropna(subset=['Prediction'])
         results_df.to_csv(latest_analysis_file_path, index=False)
         #print(f"Analysis saved to {latest_analysis_file_path}")
 
@@ -67,6 +68,14 @@ def get_latest_analysis(tickers_file_path="tickers_test.txt"):
     time_taken = time.time() - start_time
     with open("time_taken.txt", "a") as f:
         f.write(f"{time_taken:.9f}\n")
+
+    zipped = list(zip(tickers, preds))
+    filtered_zipped = []
+    for ticker, pred in zipped:
+        if pred is None:
+            continue
+        filtered_zipped.append((ticker, pred))
+    tickers, preds = zip(*filtered_zipped)
     
     return tickers, preds
 
