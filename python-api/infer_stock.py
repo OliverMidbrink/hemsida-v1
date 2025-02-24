@@ -6,7 +6,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import infer
 import numpy as np
 import requests
-
+from datetime import datetime, timedelta
 def infer_stocks(stocks):
     _stocks = " ".join(stocks)
 
@@ -30,12 +30,16 @@ def infer_stocks(stocks):
         #print(data)
     exit()"""
 
-
-    data = yf.download(_stocks, period="3mo")["Open"]
+    five_months_ago = (datetime.now() - timedelta(days=150)).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    data = yf.download(_stocks, start=five_months_ago, end=tomorrow)
+    print("Data: ", data)
+    data = data["Open"]
 
     preds = []
     for ticker in data.columns:
         ticker_data = data[ticker][-55:].values
+        print("Ticker: ", ticker, "Data: ", ticker_data)
         preds.append(infer.infer(ticker_data))
 
     return preds, data.tail(1)

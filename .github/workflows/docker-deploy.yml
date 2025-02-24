@@ -1,0 +1,51 @@
+name: Docker Build and Deploy
+
+on:
+  push:
+    branches: [ main ]  # or your default branch
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/stockapp:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/stockapp:${{ github.sha }}
+
+    - name: Deploy to DigitalOcean Droplet
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.DROPLET_HOST }}
+        username: ${{ secrets.DROPLET_USERNAME }}
+        key: ${{ secrets.DROPLET_SSH_KEY }}
+        script: |
+          # Pull the latest image
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/stockapp:latest
+          
+          # Stop the existing container
+          docker stop stockapp || true
+          docker rm stockapp || true
+          
+          # Start the new container
+          docker run -d \
+            --name stockapp \
+            -p 80:4173 \
+            -p 8000:8000 \
+            -v /root/stockapp/data:/app/data \
+            ${{ secrets.DOCKERHUB_USERNAME }}/stockapp:latest 

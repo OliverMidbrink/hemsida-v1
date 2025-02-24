@@ -16,6 +16,14 @@ def get_latest_analysis(tickers_file_path="tickers_test.txt"):
     preds = []
     tail = None
 
+    
+    # Check if today is a weekend
+    if today.weekday() >= 5:
+        with open(tickers_file_path, "r") as f:
+            tickers = [line.strip() for line in f if line.strip()]
+        print(f"Today is a weekend, skipping analysis for {today}")
+        return tickers, []*len(tickers)
+
     if os.path.exists(latest_analysis_file_path):
         #print(f"Loading analysis from {latest_analysis_file_path}")
         df = pd.read_csv(latest_analysis_file_path)
