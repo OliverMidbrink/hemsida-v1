@@ -1,16 +1,22 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   server: {
     port: 5173,
+    https: false, // Enable HTTPS
     proxy: {
-      '/api': {
+      '/user-api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/data-api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
       },
       '/python-api': {
         target: 'http://127.0.0.1:8000',
@@ -20,20 +26,21 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/python-api/, ''),
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
-            console.log('proxy error', err);
+            console.error('Proxy error:', err);
           });
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
+            console.log('Proxying request:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode);
+            console.log('Received response:', proxyRes.statusCode, req.url);
           });
-        }
-      }
-    }
+        },
+        allowedHosts: ['molytica.ai'],
+      },
+    },
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
-  }
-}) 
+    sourcemap: true,
+  },
+});

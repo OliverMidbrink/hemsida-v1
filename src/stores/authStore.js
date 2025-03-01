@@ -14,7 +14,7 @@ const getStoredUser = () => {
 
 const useAuthStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: getStoredUser(),
       loading: false,
       error: null,
@@ -25,11 +25,21 @@ const useAuthStore = create(
         set({ user: null });
       },
       
+      // Get auth header for API requests
+      getAuthHeader: () => {
+        const { user } = get();
+        if (!user || !user.token) return {};
+        
+        return {
+          'Authorization': `Bearer ${user.token}`
+        };
+      },
+      
       // Login function
       login: async (email, password) => {
         set({ loading: true, error: null });
         try {
-          const response = await fetch('/api/login', {
+          const response = await fetch('/user-api/login', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -55,7 +65,7 @@ const useAuthStore = create(
       register: async (email, password) => {
         set({ loading: true, error: null });
         try {
-          const response = await fetch('/api/register', {
+          const response = await fetch('/user-api/register', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -74,6 +84,25 @@ const useAuthStore = create(
         } catch (error) {
           set({ error: error.message, loading: false });
           throw error;
+        }
+      },
+
+      // Verify token is still valid
+      verifyToken: async () => {
+        const { user } = get();
+        if (!user || !user.token) return false;
+        
+        try {
+          const response = await fetch('/user-api/verify-token', {
+            headers: {
+              'Authorization': `Bearer ${user.token}`
+            }
+          });
+          
+          return response.ok;
+        } catch (error) {
+          console.error('Token verification failed:', error);
+          return false;
         }
       },
 

@@ -36,7 +36,7 @@ function Messages() {
   // Fetch messages
   const fetchMessages = useCallback(async () => {
     try {
-      const response = await fetch('/api/messages');
+      const response = await fetch('/user-api/messages');
       if (response.ok) {
         const data = await response.json();
         // Ensure read status is a number
@@ -62,7 +62,7 @@ function Messages() {
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/messages/${id}/toggle-read`, {
+      const response = await fetch(`/user-api/messages/${id}/toggle-read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

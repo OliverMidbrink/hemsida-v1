@@ -19,7 +19,7 @@ function Search() {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:8000/ws/${clientId}`);
+    const ws = new WebSocket(`ws://localhost:8000/data-api/ws/${clientId}`);
     
     ws.onopen = () => {
       console.log('WebSocket Connected');
@@ -55,10 +55,11 @@ function Search() {
     
     setLoading(true);
     try {
-      const response = await fetch('/python-api/search', {
+      const response = await fetch('/data-api/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Client-ID': clientId
         },
         body: JSON.stringify({
           search_text: searchText,

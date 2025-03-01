@@ -30,8 +30,9 @@ import ClearAllIcon from '@mui/icons-material/ClearAll';
 function JobsList() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { clientId, socket, setSocket } = useWebSocketStore();
+  const { clientId, connect, disconnect, socket, connected } = useWebSocketStore();
   const user = useAuthStore(state => state.user);
+  const getAuthHeader = useAuthStore(state => state.getAuthHeader);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const [expandedLogs, setExpandedLogs] = useState({});
@@ -46,37 +47,15 @@ function JobsList() {
   // Add ref to track polling interval
   const pollingInterval = useRef(null);
 
-  // Add a ref to track the WebSocket instance
-  const wsRef = useRef(null);
-
   // WebSocket setup
   useEffect(() => {
-    let mounted = true;
-    let reconnectTimeout = null;
-
-    const connect = () => {
-      if (!mounted || !user) return;
-
-      // Close existing connection if any
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-
-      const wsUrl = `ws://localhost:8000/ws/${clientId}?token=${user.id}`;
-      console.log('Connecting WebSocket...', { clientId, userId: user.id });
+    if (user) {
+      // Connect to WebSocket
+      connect();
       
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket Connected');
-        setSocket(ws);
-        reconnectAttempts.current = 0;
-      };
-
-      ws.onmessage = (event) => {
-        if (!mounted) return;
-        
+      // Set up message handler
+      if (socket) {
+        socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           console.log('WebSocket received:', data);
@@ -84,13 +63,13 @@ function JobsList() {
           if (data.type === 'job_update') {
             // Update UI immediately
             setJobs(prevJobs => {
-              const jobIndex = prevJobs.findIndex(j => j.job_id === data.job_id);
+                const jobIndex = prevJobs.findIndex(j => j.id === data.job_id);
               const updatedJobs = [...prevJobs];
 
               const updatedJob = {
                 ...(jobIndex >= 0 ? updatedJobs[jobIndex] : {}),
                 ...data,
-                search_text: jobIndex >= 0 ? updatedJobs[jobIndex].search_text : data.search_text,
+                  text: jobIndex >= 0 ? updatedJobs[jobIndex].text : data.search_text,
                 _lastUpdate: Date.now()
               };
 
@@ -139,32 +118,14 @@ function JobsList() {
           console.error('WebSocket message error:', error);
         }
       };
-
-      ws.onclose = () => {
-        console.log('WebSocket closed');
-        if (mounted && reconnectAttempts.current < maxReconnectAttempts) {
-          reconnectAttempts.current += 1;
-          reconnectTimeout = setTimeout(connect, 1000);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-    };
-
-    connect();
+      }
+    }
 
     return () => {
-      mounted = false;
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      // Disconnect WebSocket when component unmounts
+      disconnect();
     };
-  }, [user, clientId]); // Only depend on user and clientId
+  }, [user, connect, disconnect, socket]);
 
   // Initial fetch of jobs
   useEffect(() => {
@@ -172,9 +133,10 @@ function JobsList() {
       if (!user) return;
       
       try {
-        const response = await fetch('/python-api/jobs', {
+        const response = await fetch('/data-api/jobs', {
           headers: {
-            'Authorization': user.id.toString()
+            'Accept': 'application/json',
+            ...getAuthHeader()
           }
         });
         if (response.ok) {
@@ -197,9 +159,10 @@ function JobsList() {
     if (!user) return;
     
     try {
-      const response = await fetch(`/python-api/jobs/${jobId}`, {
+      const response = await fetch(`/data-api/jobs/${jobId}`, {
         headers: {
-          'Authorization': user.id.toString()
+          'Accept': 'application/json',
+          ...getAuthHeader()
         }
       });
       if (response.ok) {
@@ -301,9 +264,10 @@ function JobsList() {
   const refreshJobs = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/python-api/jobs', {
+      const response = await fetch('/data-api/jobs', {
         headers: {
-          'Authorization': user.id.toString()
+          'Accept': 'application/json',
+          ...getAuthHeader()
         }
       });
       if (response.ok) {
@@ -323,9 +287,10 @@ function JobsList() {
     if (!user) return;
     
     try {
-      const response = await fetch(`/python-api/jobs/${jobId}/logs`, {
+      const response = await fetch(`/data-api/jobs/${jobId}/logs`, {
         headers: {
-          'Authorization': user.id.toString()
+          'Accept': 'application/json',
+          ...getAuthHeader()
         }
       });
       if (response.ok) {
@@ -367,10 +332,11 @@ function JobsList() {
     if (!user) return;
     
     try {
-      const response = await fetch(`/python-api/jobs/${jobId}`, {
+      const response = await fetch(`/data-api/jobs/${jobId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': user.id.toString()
+          'Accept': 'application/json',
+          ...getAuthHeader()
         }
       });
       
@@ -406,10 +372,11 @@ function JobsList() {
     if (!user) return;
     
     try {
-      const response = await fetch('/python-api/jobs/clear-all', {
+      const response = await fetch('/data-api/jobs', {
         method: 'DELETE',
         headers: {
-          'Authorization': user.id.toString()
+          'Accept': 'application/json',
+          ...getAuthHeader()
         }
       });
       

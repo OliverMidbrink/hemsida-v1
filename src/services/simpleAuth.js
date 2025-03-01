@@ -1,7 +1,7 @@
 export const simpleAuth = {
   signIn: async (email, password) => {
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch('/user-api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -24,7 +24,7 @@ export const simpleAuth = {
   signUp: async (email, password) => {
     try {
       console.log('Sending registration request:', { email }); // Debug log
-      const response = await fetch('/api/register', {
+      const response = await fetch('/user-api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

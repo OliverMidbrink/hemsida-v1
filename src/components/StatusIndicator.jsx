@@ -6,6 +6,8 @@ import useAuthStore from '../stores/authStore';
 function StatusIndicator() {
   const [status, setStatus] = useState({ health: false, auth: false, checking: true });
   const user = useAuthStore(state => state.user);
+  const getAuthHeader = useAuthStore(state => state.getAuthHeader);
+  const verifyToken = useAuthStore(state => state.verifyToken);
 
   useEffect(() => {
     let mounted = true;
@@ -20,7 +22,8 @@ function StatusIndicator() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-        const healthResponse = await fetch('/python-api/health', {
+        // Check API health
+        const healthResponse = await fetch('/data-api/health', {
           signal: controller.signal,
           headers: {
             'Accept': 'application/json',
@@ -29,10 +32,16 @@ function StatusIndicator() {
         
         clearTimeout(timeoutId);
         
+        // Check authentication if user exists
+        let authStatus = false;
+        if (user && user.token) {
+          authStatus = await verifyToken();
+        }
+        
         if (mounted) {
           setStatus({
             health: healthResponse.ok,
-            auth: true,
+            auth: authStatus,
             checking: false
           });
         }
@@ -55,7 +64,7 @@ function StatusIndicator() {
       mounted = false;
       clearInterval(checkInterval);
     };
-  }, [user]);
+  }, [user, verifyToken]);
 
   const getStatusInfo = () => {
     if (status.checking) {

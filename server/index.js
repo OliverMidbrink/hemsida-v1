@@ -5,9 +5,39 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
-dotenv.config();
+import jwt from 'jsonwebtoken';
 
+// Get the directory of the current file
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Define potential .env file locations to check - all relative to the index.js file location
+const envPaths = [
+  path.join(__dirname, '.env'),               // Same directory as index.js
+  path.join(__dirname, '../.env'),            // Parent directory of index.js
+  path.join(__dirname, '../../.env'),         // Grandparent directory of index.js
+  path.join(process.cwd(), '.env')            // Current working directory (fallback)
+];
+
+// Log the paths we're checking
+console.log('Looking for .env file in the following locations:');
+envPaths.forEach(path => console.log(' - ' + path));
+
+// Try to load .env from each location until one is found
+let envLoaded = false;
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    console.log(`Loading .env from: ${envPath}`);
+    dotenv.config({ path: envPath });
+    envLoaded = true;
+    break;
+  }
+}
+
+if (!envLoaded) {
+  console.warn('No .env file found in any of the checked locations. Using default environment variables.');
+  dotenv.config(); // Try default location as fallback
+}
+
 const dbPath = path.join(__dirname, '../data/users.db');
 
 // At the top of server/index.js, add more logging
@@ -79,8 +109,51 @@ app.use((req, res, next) => {
   next();
 });
 
-// Auth endpoints
-app.post('/register', (req, res) => {
+// JWT Secret - use environment variable or a default (in production, always use env var)
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h';
+
+// Function to generate JWT token
+const generateToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user.id,
+      email: user.email,
+      is_admin: user.is_admin 
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRY }
+  );
+};
+
+// Function to verify JWT token
+const verifyToken = (token) => {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+};
+
+// Middleware to authenticate requests
+const authenticateJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (authHeader) {
+    const token = authHeader.split(' ')[1]; // Bearer TOKEN format
+    
+    const user = verifyToken(token);
+    if (user) {
+      req.user = user;
+      return next();
+    }
+  }
+  
+  return res.status(401).json({ error: 'Unauthorized' });
+};
+
+// Auth endpoints (now under /user-api/)
+app.post('/user-api/register', (req, res) => {
   console.log('Register request received:', req.body);
   const { email, password } = req.body;
   
@@ -107,8 +180,12 @@ app.post('/register', (req, res) => {
     
     if (result.changes > 0) {
       const user = { id: result.lastInsertRowid, email, is_admin: isAdmin };
+      
+      // Generate JWT token
+      const token = generateToken(user);
+      
       console.log('User created:', user);
-      res.json(user);
+      res.json({ ...user, token });
     } else {
       console.log('Failed to create user');
       res.status(400).json({ error: 'Failed to create user' });
@@ -119,7 +196,7 @@ app.post('/register', (req, res) => {
   }
 });
 
-app.post('/login', (req, res) => {
+app.post('/user-api/login', (req, res) => {
   const { email, password } = req.body;
   try {
     const stmt = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?');
@@ -127,7 +204,11 @@ app.post('/login', (req, res) => {
     
     if (user) {
       const { password: _, ...safeUser } = user;
-      res.json(safeUser);
+      
+      // Generate JWT token
+      const token = generateToken(safeUser);
+      
+      res.json({ ...safeUser, token });
     } else {
       res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -136,8 +217,13 @@ app.post('/login', (req, res) => {
   }
 });
 
-// Get messages (admin only)
-app.get('/messages', async (req, res) => {
+// Endpoint to verify token and get user info
+app.get('/user-api/verify-token', authenticateJWT, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// Get messages (admin only) under /user-api/
+app.get('/user-api/messages', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM messages ORDER BY created_at DESC');
     const messages = stmt.all();
@@ -147,8 +233,8 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// Create new message
-app.post('/messages', async (req, res) => {
+// Create new message under /user-api/
+app.post('/user-api/messages', async (req, res) => {
   const { name, email, message } = req.body;
   try {
     const stmt = db.prepare(
@@ -161,8 +247,8 @@ app.post('/messages', async (req, res) => {
   }
 });
 
-// Toggle message read status (admin only)
-app.post('/messages/:id/toggle-read', (req, res) => {
+// Toggle message read status (admin only) under /user-api/
+app.post('/user-api/messages/:id/toggle-read', (req, res) => {
   try {
     // Define a transaction that toggles the read status and returns the updated message
     const toggleTransaction = db.transaction((id) => {
@@ -231,4 +317,4 @@ const PORT = process.env.PORT || 3001;
 startServer(PORT).catch(error => {
   console.error('Failed to start server:', error);
   process.exit(1);
-}); 
+});

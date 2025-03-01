@@ -1,13 +1,11 @@
-import { Typography, Box, Paper, Tabs, Tab, Dialog, DialogContent, IconButton } from '@mui/material';
+import { Typography, Box, Paper, Tabs, Tab } from '@mui/material';
 import { useState, useEffect } from 'react';
 import useAuthStore from '../stores/authStore';
 import Messages from '../components/dashboard/Messages';
 import JobsList from '../components/jobs/JobsList';
 import { useLocation } from 'react-router-dom';
 import TickerChart from '../components/TickerChart';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import CloseIcon from '@mui/icons-material/Close';
+import AnalysisGrid from '../components/dashboard/AnalysisGrid';
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -37,7 +35,9 @@ function Dashboard() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [errorAnalysis, setErrorAnalysis] = useState(null);
   const [selectedTickerIndex, setSelectedTickerIndex] = useState(null);
-  const [openTickerDialog, setOpenTickerDialog] = useState(false);
+  const [cachedIndices, setCachedIndices] = useState(new Set());
+  const [selectedTicker, setSelectedTicker] = useState("");
+  const tickers = [/* The array of ticker symbols you have, e.g. "AAPL", "TSLA", etc. */];
   
   // Extract username from email (everything before the first dot, uppercase)
   const username = user?.email
@@ -65,7 +65,11 @@ function Dashboard() {
   if (analysisResults && selectedTickerIndex !== null) {
       const total = analysisResults.predictions.reduce((sum, p) => sum + p, 0);
       const mean = total / analysisResults.predictions.length;
-      const variance = analysisResults.predictions.reduce((acc, p) => acc + Math.pow(p - mean, 2), 0) / analysisResults.predictions.length;
+    const variance =
+      analysisResults.predictions.reduce(
+        (acc, p) => acc + Math.pow(p - mean, 2),
+        0
+      ) / analysisResults.predictions.length;
       const std = Math.sqrt(variance);
 
       const getBackgroundColor = (prediction) => {
@@ -73,16 +77,16 @@ function Dashboard() {
            let n = (prediction - mean) / std;
            n = Math.max(-1, Math.min(1, n));
            if (n >= 0) {
-               const factor = n; // factor from 0 to 1.
-               const r = Math.round(255 * (1 - factor) + 0 * factor);
+        const factor = n;
+        const r = Math.round(255 * (1 - factor));
                const g = Math.round(255 * (1 - factor) + 128 * factor);
-               const b = Math.round(255 * (1 - factor) + 0 * factor);
+        const b = Math.round(255 * (1 - factor));
                return `rgb(${r}, ${g}, ${b})`;
            } else {
                const factor = -n;
                const r = Math.round(255 * (1 - factor) + 150 * factor);
-               const g = Math.round(255 * (1 - factor) + 0 * factor);
-               const b = Math.round(255 * (1 - factor) + 0 * factor);
+        const g = Math.round(255 * (1 - factor));
+        const b = Math.round(255 * (1 - factor));
                return `rgb(${r}, ${g}, ${b})`;
            }
       };
@@ -93,7 +97,7 @@ function Dashboard() {
     const fetchAnalysis = async () => {
       setLoadingAnalysis(true);
       try {
-        const response = await fetch('http://localhost:8000/analyze');
+        const response = await fetch('/data-api/analyze');
         if (!response.ok) throw new Error('Failed to fetch analysis results');
         const data = await response.json();
         setAnalysisResults(data);
@@ -105,6 +109,57 @@ function Dashboard() {
     };
     fetchAnalysis();
   }, []);
+
+  // Automatically select the first ticker index once analysis results have loaded
+  useEffect(() => {
+    if (analysisResults && selectedTickerIndex === null && analysisResults.tickers.length > 0) {
+      setSelectedTickerIndex(0);
+    }
+  }, [analysisResults, selectedTickerIndex]);
+
+  // Automatically select the first ticker if none is selected
+  useEffect(() => {
+    if (!selectedTicker && tickers.length > 0) {
+      setSelectedTicker(tickers[0]);
+    }
+  }, [selectedTicker, tickers]);
+
+  // Handlers for "Previous" and "Next" in the TickerChart
+  const handlePrevTicker = () => {
+    if (selectedTickerIndex > 0) {
+      setSelectedTickerIndex(selectedTickerIndex - 1);
+    }
+  };
+
+  const handleNextTicker = () => {
+    if (analysisResults && selectedTickerIndex < analysisResults.tickers.length - 1) {
+      setSelectedTickerIndex(selectedTickerIndex + 1);
+    }
+  };
+
+  // Cache adjacent tickers around the current one.
+  const cacheAdjacentCharts = (mainIndex) => {
+    if (!analysisResults) return;
+    const adjacentIndices = [
+      mainIndex - 2,
+      mainIndex - 1,
+      mainIndex + 1,
+      mainIndex + 2,
+    ].filter(i => i >= 0 && i < analysisResults.tickers.length);
+
+    setCachedIndices(prev => {
+      const newCache = new Set(prev);
+      adjacentIndices.forEach(i => newCache.add(i));
+      return newCache;
+    });
+  };
+
+  // When user clicks a grid cell, select that ticker, and schedule its neighbors to cache.
+  const handleTickerSelect = (idx) => {
+    setSelectedTickerIndex(idx);
+    setCachedIndices(prev => new Set([...prev, idx]));
+    setTimeout(() => cacheAdjacentCharts(idx), 100);
+  };
 
   return (
     <Box>
@@ -128,82 +183,57 @@ function Dashboard() {
           <TabPanel value={currentTab} index={0}>
           {loadingAnalysis && <Typography>Loading analysis results...</Typography>}
           {errorAnalysis && <Typography color="error">{errorAnalysis}</Typography>}
-          {analysisResults && (() => {
-              // Compute mean and standard deviation for fluid color scaling.
-              const total = analysisResults.predictions.reduce((sum, p) => sum + p, 0);
-              const mean = total / analysisResults.predictions.length;
-              const variance = analysisResults.predictions.reduce((acc, p) => acc + Math.pow(p - mean, 2), 0) / analysisResults.predictions.length;
-              const std = Math.sqrt(variance);
 
-              // Function to compute a fluid gradient background color.
-              // For n = (prediction - mean)/std clamped to [-1, 1]:
-              //    n = 0   => white (255,255,255)
-              //    n =  +1 => dark green (0,128,0)
-              //    n =  -1 => dark red   (150,0,0)
-              const getBackgroundColor = (prediction) => {
-                  if (std === 0) return "#ffffff";
-                  let n = (prediction - mean) / std;
-                  n = Math.max(-1, Math.min(1, n));
-                  if (n >= 0) {
-                      const factor = n; // factor from 0 to 1.
-                      const r = Math.round(255 * (1 - factor) + 0 * factor);       // from 255 to 0
-                      const g = Math.round(255 * (1 - factor) + 128 * factor);     // from 255 to 128
-                      const b = Math.round(255 * (1 - factor) + 0 * factor);       // from 255 to 0
-                      return `rgb(${r}, ${g}, ${b})`;
-                  } else {
-                      const factor = -n; // factor from 0 to 1.
-                      const r = Math.round(255 * (1 - factor) + 150 * factor);     // from 255 to 150
-                      const g = Math.round(255 * (1 - factor) + 0 * factor);       // from 255 to 0
-                      const b = Math.round(255 * (1 - factor) + 0 * factor);       // from 255 to 0
-                      return `rgb(${r}, ${g}, ${b})`;
-                  }
-              };
-
-              // Map tickers to grid cells; now open a modal dialog showing the TickerChart.
-              const cells = analysisResults.tickers.map((ticker, idx) => {
-                 const prediction = analysisResults.predictions[idx];
-                 const bgColor = getBackgroundColor(prediction);
-                 return (
-                   <Box
-                     key={ticker}
-                     onClick={() => {
-                       setSelectedTickerIndex(idx);
-                       setOpenTickerDialog(true);
-                     }}
+          {analysisResults && selectedTickerIndex !== null && (
+            <>
+              {/*
+                A single container of fixed height (e.g. 600px). 
+                We absolutely position each TickerChart inside. 
+                Only the selected one is visible; the others are hidden 
+                but remain in the DOM to avoid re-loading.
+              */}
+              <Box sx={{ position: 'relative', height: 600, mb: 2 }}>
+                {Array.from(new Set([...cachedIndices, selectedTickerIndex])).map(i => (
+                  <Box
+                    key={i}
                      sx={{
-                       width: '100%',
-                       aspectRatio: '1',
-                       backgroundColor: bgColor,
-                       display: 'flex',
-                       alignItems: 'center',
-                       justifyContent: 'center',
-                       cursor: 'pointer',
-                       border: '1px solid #ccc',
-                       p: 0.25
-                     }}
-                   >
-                     <Typography 
-                       sx={{ 
-                         fontSize: '0.65rem',
-                         lineHeight: 1
-                       }}
-                     >
-                       {ticker}
-                     </Typography>
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      // Show only if this index is currently selected
+                      visibility: i === selectedTickerIndex ? 'visible' : 'hidden',
+                      zIndex: i === selectedTickerIndex ? 1 : 0,
+                    }}
+                  >
+                    <TickerChart
+                      ticker={analysisResults.tickers[i]}
+                      prediction={analysisResults.predictions[i]}
+                      color={
+                        i === selectedTickerIndex
+                          ? selectedTickerColor
+                          : '#ffffff'
+                      }
+                      onPrev={handlePrevTicker}
+                      onNext={handleNextTicker}
+                      isPrevDisabled={selectedTickerIndex === 0}
+                      isNextDisabled={
+                        analysisResults &&
+                        selectedTickerIndex === analysisResults.tickers.length - 1
+                      }
+                    />
                    </Box>
-                 );
-              });
-
-              return (
-                <Box sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(46px, 1fr))',
-                  gap: 0.25
-                }}>
-                  {cells}
+                ))}
                 </Box>
-              );
-          })()}
+            </>
+          )}
+
+          <AnalysisGrid
+            analysisResults={analysisResults}
+            selectedTickerIndex={selectedTickerIndex}
+            onSelectTicker={handleTickerSelect}
+          />
         </TabPanel>
 
         {/* TabPanel for Jobs (Overview) */}
@@ -220,70 +250,6 @@ function Dashboard() {
           </TabPanel>
         )}
         </Paper>
-
-      {/* Modal Dialog for Ticker Chart */}
-      <Dialog
-        open={openTickerDialog}
-        onClose={() => setOpenTickerDialog(false)}
-        fullWidth
-        maxWidth="lg"
-      >
-        <DialogContent sx={{ position: 'relative', height: '80vh', p: 0 }}>
-          <TickerChart 
-            ticker={analysisResults && selectedTickerIndex !== null ? analysisResults.tickers[selectedTickerIndex] : ""}
-            prediction={analysisResults && selectedTickerIndex !== null ? analysisResults.predictions[selectedTickerIndex] : 0}
-            color={selectedTickerColor}
-          />
-          <IconButton
-            onClick={() => {
-              if (selectedTickerIndex > 0) setSelectedTickerIndex(selectedTickerIndex - 1);
-            }}
-            disabled={selectedTickerIndex === 0}
-            sx={{
-              position: 'absolute',
-              top: '50%',
-              left: 16,
-              transform: 'translateY(-50%)',
-              backgroundColor: '#ffffff',
-              borderRadius: '50%',
-              "&:hover": { backgroundColor: '#ffffff' }
-            }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <IconButton
-            onClick={() => {
-              if (analysisResults && selectedTickerIndex < analysisResults.tickers.length - 1)
-                setSelectedTickerIndex(selectedTickerIndex + 1);
-            }}
-            disabled={analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1}
-            sx={{
-              position: 'absolute',
-              top: '50%',
-              right: 16,
-              transform: 'translateY(-50%)',
-              backgroundColor: '#ffffff',
-              borderRadius: '50%',
-              "&:hover": { backgroundColor: '#ffffff' }
-            }}
-          >
-            <ArrowForwardIcon />
-          </IconButton>
-          <IconButton
-            onClick={() => setOpenTickerDialog(false)}
-            sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              backgroundColor: '#ffffff',
-              borderRadius: '50%',
-              "&:hover": { backgroundColor: '#ffffff' }
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogContent>
-      </Dialog>
     </Box>
   );
 }

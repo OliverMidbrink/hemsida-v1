@@ -20,6 +20,7 @@ function CreateJob() {
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
+  const getAuthHeader = useAuthStore(state => state.getAuthHeader);
   const { clientId } = useWebSocketStore();
 
   const handleSubmit = async (e) => {
@@ -28,12 +29,12 @@ function CreateJob() {
 
     setLoading(true);
     try {
-      const response = await fetch('/python-api/search', {
+      const response = await fetch('/data-api/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': user.id.toString()
+          ...getAuthHeader()
         },
         body: JSON.stringify({
           text: jobText,

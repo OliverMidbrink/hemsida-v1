@@ -14,7 +14,7 @@ function Contact() {
     setStatus({ type: '', message: '' });
 
     try {
-      const response = await fetch('/api/messages', {
+      const response = await fetch('/user-api/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

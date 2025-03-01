@@ -1,11 +1,39 @@
 version: '3.8'
+
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "8000:8000"  # FastAPI
-      - "4173:4173"  # Vite preview
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./data:/app/data  # Persist SQLite database
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./.env:/node-server/.env:ro
+      - ./.env:/python-api/.env:ro
     environment:
-      - NODE_ENV=production 
+      - NODE_ENV=production
+    networks:
+      - app-network
+
+  # Optional database service if needed
+  # db:
+  #   image: postgres:14-alpine
+  #   restart: unless-stopped
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   environment:
+  #     - POSTGRES_PASSWORD=your_password
+  #     - POSTGRES_USER=your_user
+  #     - POSTGRES_DB=your_db
+  #   networks:
+  #     - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+# volumes:
+#   postgres_data: 
