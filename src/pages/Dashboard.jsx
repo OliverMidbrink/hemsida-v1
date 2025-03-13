@@ -1,11 +1,9 @@
-import { Typography, Box, Paper, Tabs, Tab } from '@mui/material';
+import { Typography, Box, Paper, FormControl, InputLabel, Select, MenuItem, Grid, useTheme, alpha } from '@mui/material';
 import { useState, useEffect } from 'react';
-import useAuthStore from '../stores/authStore';
-import Messages from '../components/dashboard/Messages';
-import JobsList from '../components/jobs/JobsList';
 import { useLocation } from 'react-router-dom';
 import TickerChart from '../components/TickerChart';
 import AnalysisGrid from '../components/dashboard/AnalysisGrid';
+import useAuthStore from '../stores/authStore';
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -27,38 +25,36 @@ function TabPanel({ children, value, index, ...other }) {
 
 function Dashboard() {
   const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const tabParam = searchParams.get('tab');
-
-  const { user } = useAuthStore();
+  const theme = useTheme();
   const [analysisResults, setAnalysisResults] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [errorAnalysis, setErrorAnalysis] = useState(null);
   const [selectedTickerIndex, setSelectedTickerIndex] = useState(null);
   const [cachedIndices, setCachedIndices] = useState(new Set());
   const [selectedTicker, setSelectedTicker] = useState("");
+  const [selectedModel, setSelectedModel] = useState("m5");
+  const [selectedMarket, setSelectedMarket] = useState("us");
   const tickers = [/* The array of ticker symbols you have, e.g. "AAPL", "TSLA", etc. */];
   
-  // Extract username from email (everything before the first dot, uppercase)
-  const username = user?.email
-    .split('@')[0]          // Get part before @
-    .split('.')[0]          // Get part before first dot
-    .toUpperCase();        // Convert to uppercase
-
-  // Build tabs dynamically:
-  // Default tab is "Analysis". For admin, add "Jobs" and "Messages".
-  // For non-admin, if redirected from job creation with ?tab=jobs, add a "Jobs" tab.
-  let tabs = [{ label: "Analysis" }];
-  if (user.is_admin) {
-    tabs.push({ label: "Jobs" });
-    tabs.push({ label: "Messages" });
-  } else if (tabParam === "jobs") {
-    tabs.push({ label: "Jobs" });
-  }
-
-  // Set default active tab based on query parameter:
-  const defaultTabIndex = (tabParam === "jobs") ? 1 : 0;
-  const [currentTab, setCurrentTab] = useState(defaultTabIndex);
+  // Get user from auth store
+  const user = useAuthStore(state => state.user);
+  
+  // Extract username from email or use "Guest" if not logged in
+  const getUsernameFromEmail = () => {
+    if (!user || !user.email) return "Guest";
+    
+    const email = user.email;
+    // Extract first part before @ symbol
+    const namePart = email.split('@')[0];
+    
+    // If there's a dot in the first part, take only what's before the first dot
+    const firstName = namePart.split('.')[0];
+    
+    // Capitalize the first letter
+    return firstName.charAt(0).toUpperCase() + firstName.slice(1);
+  };
+  
+  const username = getUsernameFromEmail();
 
   // Compute the selected ticker's color if analysis results are available.
   let selectedTickerColor = "";
@@ -161,6 +157,16 @@ function Dashboard() {
     setTimeout(() => cacheAdjacentCharts(idx), 100);
   };
 
+  // Handle model change
+  const handleModelChange = (event) => {
+    setSelectedModel(event.target.value);
+  };
+
+  // Handle market change
+  const handleMarketChange = (event) => {
+    setSelectedMarket(event.target.value);
+  };
+
   return (
     <Box>
       <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
@@ -170,28 +176,59 @@ function Dashboard() {
         <Typography variant="h4" color="primary" gutterBottom>
           Welcome, {username}!
         </Typography>
+        {!user && (
+          <Typography variant="body1" sx={{ mb: 2, color: theme.palette.info.main }}>
+            You're viewing as a guest. <a href="/login" style={{ color: theme.palette.primary.main }}>Log in</a> to save your preferences and access more features.
+          </Typography>
+        )}
+        <Typography variant="body1" sx={{ mb: 3, color: theme.palette.text.secondary }}>
+          Here you can see predictions on different markets made by different models.
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mt: 2 }}>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth variant="outlined" size="small">
+              <InputLabel id="model-select-label">Model</InputLabel>
+              <Select
+                labelId="model-select-label"
+                id="model-select"
+                value={selectedModel}
+                onChange={handleModelChange}
+                label="Model"
+              >
+                <MenuItem value="m5">M5 Model</MenuItem>
+                <MenuItem value="m10" disabled>M10 Model (Coming Soon)</MenuItem>
+                <MenuItem value="m15" disabled>M15 Model (Coming Soon)</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth variant="outlined" size="small">
+              <InputLabel id="market-select-label">Market</InputLabel>
+              <Select
+                labelId="market-select-label"
+                id="market-select"
+                value={selectedMarket}
+                onChange={handleMarketChange}
+                label="Market"
+              >
+                <MenuItem value="us">US Market</MenuItem>
+                <MenuItem value="eu" disabled>European Market (Coming Soon)</MenuItem>
+                <MenuItem value="asia" disabled>Asian Market (Coming Soon)</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
       </Paper>
 
       <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
-        <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
-          {tabs.map((tab, index) => (
-            <Tab key={index} label={tab.label} />
-          ))}
-          </Tabs>
-
-        {/* TabPanel for Analysis */}
-          <TabPanel value={currentTab} index={0}>
+        {/* Analysis content directly without tabs */}
+        <Box sx={{ p: 3 }}>
           {loadingAnalysis && <Typography>Loading analysis results...</Typography>}
           {errorAnalysis && <Typography color="error">{errorAnalysis}</Typography>}
 
           {analysisResults && selectedTickerIndex !== null && (
             <>
-              {/*
-                A single container of fixed height (e.g. 600px). 
-                We absolutely position each TickerChart inside. 
-                Only the selected one is visible; the others are hidden 
-                but remain in the DOM to avoid re-loading.
-              */}
               <Box sx={{ position: 'relative', height: 600, mb: 2 }}>
                 {Array.from(new Set([...cachedIndices, selectedTickerIndex])).map(i => (
                   <Box
@@ -234,22 +271,8 @@ function Dashboard() {
             selectedTickerIndex={selectedTickerIndex}
             onSelectTicker={handleTickerSelect}
           />
-        </TabPanel>
-
-        {/* TabPanel for Jobs (Overview) */}
-        {tabs.length > 1 && (
-          <TabPanel value={currentTab} index={1}>
-            <JobsList />
-          </TabPanel>
-        )}
-
-        {/* TabPanel for Messages (only for admin) */}
-        {user.is_admin && tabs.length > 2 && (
-          <TabPanel value={currentTab} index={2}>
-            <Messages />
-          </TabPanel>
-        )}
-        </Paper>
+        </Box>
+      </Paper>
     </Box>
   );
 }

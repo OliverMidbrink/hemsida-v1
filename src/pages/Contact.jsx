@@ -39,6 +39,9 @@ function Contact() {
         <Typography variant="h4" gutterBottom>
           Contact Us
         </Typography>
+        <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
+          This will send a message to Oliver Midbrink, the person responsible for the website.
+        </Typography>
         {status.message && (
           <Alert severity={status.type} sx={{ mb: 2 }}>
             {status.message}
