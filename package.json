@@ -7,7 +7,7 @@
     "dev": "vite",
     "client": "vite",
     "server": "node server/index.js",
-    "python-server": "cd python-api && python3 -m uvicorn main:app --host localhost --port 8000 --reload",
+    "python-server": "cd python-api && python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "setup": "node scripts/setup-dev.js",

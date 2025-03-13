@@ -244,8 +244,24 @@ async def health_check():
 @app.get("/data-api/analyze")
 async def analyze():
     try:
-        result = ticker_analysis.get_latest_analysis()
-        return {"result": result}
+        tickers, predictions = ticker_analysis.get_latest_analysis()
+        
+        # Create a list of zipped tickers and predictions
+        zipped = list(zip(tickers, predictions))
+
+        # Sort tickers and predictions while handling non-finite values:
+        sorted_zipped = sorted(zipped, key=lambda x: x[1] if math.isfinite(x[1]) else -float('inf'), reverse=True)
+
+        if sorted_zipped:
+            tickers, predictions = zip(*sorted_zipped)
+        else:
+            tickers, predictions = [], []
+
+        # Replace non-finite predictions with None so that JSON encoding works smoothly
+        safe_predictions = [p if math.isfinite(p) else None for p in predictions]
+
+        print(tickers[:3], safe_predictions[:3])
+        return {"tickers": tickers, "predictions": safe_predictions}
     except Exception as e:
         logger.error(f"Error in analyze: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

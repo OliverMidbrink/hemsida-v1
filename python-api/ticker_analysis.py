@@ -17,7 +17,7 @@ def get_latest_analysis(tickers_file_path="tickers_test.txt"):
     tail = None
     
     # Check if today is a weekend
-    if today.weekday() >= 5:
+    if today.weekday() >= 5 and False:
         with open(tickers_file_path, "r") as f:
             tickers = [line.strip() for line in f if line.strip()]
         print(f"Today is a weekend, skipping analysis for {today}")
