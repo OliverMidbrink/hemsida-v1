@@ -1,15 +1,25 @@
 # Personal Website with JWT Authentication
 
 
-This is the real commands to actually run the server:
+## QuickRun Commands
 
-from root dir:
+**From root directory:**
+```bash
 serve -s dist -l 5173
-from project root dir:
-pm2 start server/index.js --name my-node-app
-In the python-api dir:
-uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
+**From project root directory:**
+```bash
+pm2 start server/index.js --name my-node-app
+```
+
+**In the python-api directory:**
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+
+## Project Overview
 
 This project consists of a frontend application, a Node.js authentication server, and a Python API for data handling.
 
