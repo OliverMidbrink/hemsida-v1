@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { Box, Typography, IconButton } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import useSavedStocksStore from '../stores/savedStocksStore';
 
 function TickerChart({
   ticker,
@@ -14,7 +16,19 @@ function TickerChart({
   isNextDisabled
 }) {
   const container = useRef();
-  const [dockAtBottom, setDockAtBottom] = useState(false);   // Tracks whether toolbar is on bottom or right
+  
+  // Get saved stocks functions from store
+  const { addStock, removeStock, isStockSaved } = useSavedStocksStore();
+  const isSaved = isStockSaved(ticker);
+
+  // Handle save/unsave stock
+  const handleSaveStock = () => {
+    if (isSaved) {
+      removeStock(ticker);
+    } else {
+      addStock(ticker);
+    }
+  };
 
   // Embed or re-embed TradingView chart in the container
   useEffect(() => {
@@ -41,18 +55,13 @@ function TickerChart({
     container.current.appendChild(script);
   }, [ticker]);
 
-  // Toggle the dock orientation (right <-> bottom)
-  const toggleDock = () => {
-    setDockAtBottom((prev) => !prev);
-  };
-
-  // The outer container changes flexDirection based on dockAtBottom
+  // The outer container with fixed row direction (side menu always on right)
   return (
     <Box
       sx={{
         height: '100%',
         display: 'flex',
-        flexDirection: dockAtBottom ? 'column' : 'row',
+        flexDirection: 'row',
       }}
     >
       {/* Chart container */}
@@ -81,53 +90,54 @@ function TickerChart({
         </div>
       </Box>
 
-      {/* Toolbar / signals panel */}
+      {/* Toolbar / signals panel - always on right */}
       <Box
         sx={{
-          width: dockAtBottom ? '100%' : '250px',
-          height: dockAtBottom ? '120px' : 'auto',
+          width: '250px',
+          height: 'auto',
           p: 2,
           backgroundColor: 'rgba(0,0,0,0.03)',
           display: 'flex',
-          flexDirection: dockAtBottom ? 'row' : 'column',
+          flexDirection: 'column',
           gap: 2,
           justifyContent: 'space-between',
-          alignItems: dockAtBottom ? 'center' : 'stretch',
+          alignItems: 'stretch',
         }}
       >
-        {/* Top section with toggle and probability */}
+        {/* Top section with save button and probability */}
         <Box sx={{ 
           display: 'flex', 
-          flexDirection: dockAtBottom ? 'row' : 'column',
-          gap: dockAtBottom ? 1 : 2,
-          alignItems: dockAtBottom ? 'center' : 'flex-start',
-          flex: dockAtBottom ? 1 : 'initial',
+          flexDirection: 'column',
+          gap: 2,
+          alignItems: 'flex-start',
         }}>
-          {/* Toggle button */}
-          <IconButton
-            onClick={toggleDock}
-            sx={{
-              alignSelf: dockAtBottom ? 'center' : 'flex-start',
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              '&:hover': { backgroundColor: 'rgba(255, 255, 255, 1)' },
-              mb: dockAtBottom ? 0 : 1,
-            }}
-          >
-            <MenuIcon />
-          </IconButton>
+          {/* Save Stock button */}
+          <Tooltip title={isSaved ? "Remove from saved stocks" : "Save stock"}>
+            <IconButton
+              onClick={handleSaveStock}
+              sx={{
+                alignSelf: 'flex-start',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                '&:hover': { backgroundColor: 'rgba(255, 255, 255, 1)' },
+                mb: 1,
+                color: isSaved ? 'primary.main' : 'inherit',
+              }}
+            >
+              {isSaved ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+            </IconButton>
+          </Tooltip>
 
           {/* Probability info */}
           <Box sx={{ 
             display: 'flex', 
-            flexDirection: dockAtBottom ? 'row' : 'column',
-            alignItems: dockAtBottom ? 'center' : 'flex-start',
-            gap: dockAtBottom ? 1 : 0.5
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: 0.5
           }}>
             <Typography 
               sx={{ 
                 fontWeight: 500, 
                 color: 'text.secondary',
-                fontSize: dockAtBottom ? '0.9rem' : 'inherit'
               }}
             >
               Expected probability of rising &gt; 5% in two days:
@@ -136,7 +146,6 @@ function TickerChart({
               sx={{ 
                 fontWeight: 600, 
                 color: 'text.primary',
-                fontSize: dockAtBottom ? '0.9rem' : 'inherit'
               }}
             >
               {(prediction * 100).toFixed(1)}%
@@ -148,20 +157,19 @@ function TickerChart({
         <Box sx={{ 
           display: 'flex',
           flexDirection: 'row',
-          justifyContent: dockAtBottom ? 'flex-end' : 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
-          gap: dockAtBottom ? 2 : 3,
-          minWidth: dockAtBottom ? '200px' : 'auto',
-          mt: dockAtBottom ? 0 : 2,
-          pt: dockAtBottom ? 0 : 2,
-          borderTop: dockAtBottom ? 'none' : '1px solid rgba(0,0,0,0.1)',
+          gap: 3,
+          mt: 2,
+          pt: 2,
+          borderTop: '1px solid rgba(0,0,0,0.1)',
         }}>
           {/* Signal indicator */}
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: 1.5,
-            pl: dockAtBottom ? 0 : 1,
+            pl: 1,
           }}>
             <Typography variant="h8">Signal</Typography>
             <Box
@@ -180,7 +188,7 @@ function TickerChart({
             display: 'flex', 
             flexDirection: 'row',
             gap: 0.5,
-            pr: dockAtBottom ? 0 : 1,
+            pr: 1,
           }}>
             <IconButton 
               onClick={onPrev} 

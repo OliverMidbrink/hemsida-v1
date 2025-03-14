@@ -1,9 +1,13 @@
-import { Typography, Box, Paper, FormControl, InputLabel, Select, MenuItem, Grid, useTheme, alpha } from '@mui/material';
+import { Typography, Box, Paper, FormControl, InputLabel, Select, MenuItem, Grid, useTheme, alpha, List, ListItem, ListItemText, Divider, Chip, IconButton, Collapse, Fade, Tooltip } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import TickerChart from '../components/TickerChart';
 import AnalysisGrid from '../components/dashboard/AnalysisGrid';
 import useAuthStore from '../stores/authStore';
+import useSavedStocksStore from '../stores/savedStocksStore';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -30,14 +34,19 @@ function Dashboard() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [errorAnalysis, setErrorAnalysis] = useState(null);
   const [selectedTickerIndex, setSelectedTickerIndex] = useState(null);
-  const [cachedIndices, setCachedIndices] = useState(new Set());
   const [selectedTicker, setSelectedTicker] = useState("");
   const [selectedModel, setSelectedModel] = useState("m5");
   const [selectedMarket, setSelectedMarket] = useState("us");
   const tickers = [/* The array of ticker symbols you have, e.g. "AAPL", "TSLA", etc. */];
   
+  // Add state for saved stocks panel collapse
+  const [savedStocksExpanded, setSavedStocksExpanded] = useState(true);
+  
   // Get user from auth store
   const user = useAuthStore(state => state.user);
+  
+  // Get saved stocks from store
+  const { savedStocks, removeStock } = useSavedStocksStore();
   
   // Extract username from email or use "Guest" if not logged in
   const getUsernameFromEmail = () => {
@@ -133,28 +142,9 @@ function Dashboard() {
     }
   };
 
-  // Cache adjacent tickers around the current one.
-  const cacheAdjacentCharts = (mainIndex) => {
-    if (!analysisResults) return;
-    const adjacentIndices = [
-      mainIndex - 2,
-      mainIndex - 1,
-      mainIndex + 1,
-      mainIndex + 2,
-    ].filter(i => i >= 0 && i < analysisResults.tickers.length);
-
-    setCachedIndices(prev => {
-      const newCache = new Set(prev);
-      adjacentIndices.forEach(i => newCache.add(i));
-      return newCache;
-    });
-  };
-
-  // When user clicks a grid cell, select that ticker, and schedule its neighbors to cache.
+  // When user clicks a grid cell, select that ticker
   const handleTickerSelect = (idx) => {
     setSelectedTickerIndex(idx);
-    setCachedIndices(prev => new Set([...prev, idx]));
-    setTimeout(() => cacheAdjacentCharts(idx), 100);
   };
 
   // Handle model change
@@ -165,6 +155,27 @@ function Dashboard() {
   // Handle market change
   const handleMarketChange = (event) => {
     setSelectedMarket(event.target.value);
+  };
+
+  // Handle selecting a saved stock
+  const handleSelectSavedStock = (ticker) => {
+    if (analysisResults) {
+      const index = analysisResults.tickers.findIndex(t => t === ticker);
+      if (index !== -1) {
+        setSelectedTickerIndex(index);
+      }
+    }
+  };
+
+  // Handle removing a saved stock
+  const handleRemoveSavedStock = (ticker, event) => {
+    event.stopPropagation(); // Prevent triggering the ListItem click
+    removeStock(ticker);
+  };
+
+  // Toggle saved stocks panel expansion
+  const toggleSavedStocksExpanded = () => {
+    setSavedStocksExpanded(prev => !prev);
   };
 
   return (
@@ -221,58 +232,263 @@ function Dashboard() {
         </Grid>
       </Paper>
 
-      <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
-        {/* Analysis content directly without tabs */}
-        <Box sx={{ p: 3 }}>
-          {loadingAnalysis && <Typography>Loading analysis results...</Typography>}
-          {errorAnalysis && <Typography color="error">{errorAnalysis}</Typography>}
-
-          {analysisResults && selectedTickerIndex !== null && (
-            <>
-              <Box sx={{ position: 'relative', height: 600, mb: 2 }}>
-                {Array.from(new Set([...cachedIndices, selectedTickerIndex])).map(i => (
-                  <Box
-                    key={i}
-                     sx={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      // Show only if this index is currently selected
-                      visibility: i === selectedTickerIndex ? 'visible' : 'hidden',
-                      zIndex: i === selectedTickerIndex ? 1 : 0,
+      <Box sx={{ display: 'flex', gap: 3 }}>
+        {/* Saved Stocks Panel - Collapsible Sidebar */}
+        <Box
+          sx={{
+            width: savedStocksExpanded ? '250px' : '40px',
+            transition: 'width 0.3s ease',
+            flexShrink: 0,
+          }}
+        >
+          <Paper 
+            elevation={3} 
+            sx={{ 
+              height: '100%',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+            }}
+          >
+            {/* Header with toggle button */}
+            <Box sx={{ 
+              p: savedStocksExpanded ? 2 : 1, 
+              pb: savedStocksExpanded ? 1 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: savedStocksExpanded ? 'space-between' : 'center',
+              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+              minHeight: '48px',
+            }}>
+              {savedStocksExpanded ? (
+                <>
+                  <Typography variant="h6">Saved Stocks</Typography>
+                  <IconButton
+                    onClick={toggleSavedStocksExpanded}
+                    size="small"
+                    aria-expanded={savedStocksExpanded}
+                    aria-label="collapse saved stocks"
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.divider, 0.1),
+                        color: theme.palette.text.primary,
+                      },
                     }}
                   >
-                    <TickerChart
-                      ticker={analysisResults.tickers[i]}
-                      prediction={analysisResults.predictions[i]}
-                      color={
-                        i === selectedTickerIndex
-                          ? selectedTickerColor
-                          : '#ffffff'
-                      }
-                      onPrev={handlePrevTicker}
-                      onNext={handleNextTicker}
-                      isPrevDisabled={selectedTickerIndex === 0}
-                      isNextDisabled={
-                        analysisResults &&
-                        selectedTickerIndex === analysisResults.tickers.length - 1
-                      }
-                    />
-                   </Box>
-                ))}
-                </Box>
-            </>
-          )}
+                    <ChevronLeftIcon />
+                  </IconButton>
+                </>
+              ) : (
+                <Tooltip title="Expand saved stocks" placement="right">
+                  <IconButton
+                    onClick={toggleSavedStocksExpanded}
+                    size="small"
+                    aria-expanded={savedStocksExpanded}
+                    aria-label="expand saved stocks"
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.divider, 0.1),
+                        color: theme.palette.text.primary,
+                      },
+                    }}
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
 
-          <AnalysisGrid
-            analysisResults={analysisResults}
-            selectedTickerIndex={selectedTickerIndex}
-            onSelectTicker={handleTickerSelect}
-          />
+            {/* Content */}
+            <Box sx={{ 
+              flex: 1, 
+              overflow: 'auto',
+              p: savedStocksExpanded ? 2 : 1,
+              pt: savedStocksExpanded ? 2 : 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: savedStocksExpanded ? 'stretch' : 'center',
+            }}>
+              {savedStocksExpanded ? (
+                // Expanded view
+                savedStocks.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+                    No saved stocks yet. Click the bookmark icon next to a stock chart to save it.
+                  </Typography>
+                ) : (
+                  <List dense>
+                    {savedStocks.map((ticker) => (
+                      <ListItem 
+                        key={ticker}
+                        button
+                        onClick={() => handleSelectSavedStock(ticker)}
+                        sx={{
+                          borderRadius: 1,
+                          mb: 0.5,
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                          },
+                          ...(analysisResults && selectedTickerIndex !== null && 
+                             analysisResults.tickers[selectedTickerIndex] === ticker && {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                            '&:hover': {
+                              backgroundColor: alpha(theme.palette.primary.main, 0.15),
+                            },
+                          }),
+                        }}
+                        secondaryAction={
+                          <IconButton 
+                            edge="end" 
+                            aria-label="delete" 
+                            size="small"
+                            onClick={(e) => handleRemoveSavedStock(ticker, e)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        }
+                      >
+                        <ListItemText 
+                          primary={ticker} 
+                          primaryTypographyProps={{
+                            fontWeight: analysisResults && selectedTickerIndex !== null && 
+                                       analysisResults.tickers[selectedTickerIndex] === ticker ? 600 : 400
+                          }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )
+              ) : (
+                // Collapsed view - just show icons for saved stocks
+                <>
+                  {savedStocks.length > 0 ? (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      gap: 1,
+                      mt: 1
+                    }}>
+                      {/* Show count chip at the top */}
+                      <Tooltip title={`${savedStocks.length} saved stock${savedStocks.length !== 1 ? 's' : ''}`} placement="right">
+                        <Chip
+                          label={savedStocks.length}
+                          size="small"
+                          color="primary"
+                          sx={{ 
+                            width: '28px',
+                            height: '28px',
+                            mb: 1
+                          }}
+                        />
+                      </Tooltip>
+                      
+                      {/* Show first 5 stocks */}
+                      {savedStocks.slice(0, 5).map((ticker) => (
+                        <Tooltip key={ticker} title={ticker} placement="right">
+                          <Chip
+                            label={ticker.slice(0, 1)}
+                            size="small"
+                            color={analysisResults && selectedTickerIndex !== null && 
+                                  analysisResults.tickers[selectedTickerIndex] === ticker ? "primary" : "default"}
+                            onClick={() => handleSelectSavedStock(ticker)}
+                            sx={{ 
+                              cursor: 'pointer',
+                              width: '28px',
+                              height: '28px',
+                            }}
+                          />
+                        </Tooltip>
+                      ))}
+                      
+                      {/* Show "more" indicator if needed */}
+                      {savedStocks.length > 5 && (
+                        <Tooltip title={`${savedStocks.length - 5} more - click to expand`} placement="right">
+                          <Chip
+                            label="+"
+                            size="small"
+                            variant="outlined"
+                            sx={{ 
+                              cursor: 'pointer',
+                              width: '28px',
+                              height: '28px',
+                            }}
+                            onClick={toggleSavedStocksExpanded}
+                          />
+                        </Tooltip>
+                      )}
+                    </Box>
+                  ) : (
+                    <Tooltip title="No saved stocks" placement="right">
+                      <Chip
+                        label="0"
+                        size="small"
+                        variant="outlined"
+                        sx={{ 
+                          width: '28px',
+                          height: '28px',
+                          mt: 1
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                </>
+              )}
+            </Box>
+          </Paper>
         </Box>
-      </Paper>
+
+        {/* Chart Panel */}
+        <Box sx={{ flex: 1 }}>
+          <Paper elevation={3} sx={{ p: 4, mb: 3 }}>
+            {/* Analysis content directly without tabs */}
+            <Box sx={{ p: 3 }}>
+              {loadingAnalysis && <Typography>Loading analysis results...</Typography>}
+              {errorAnalysis && <Typography color="error">{errorAnalysis}</Typography>}
+
+              {analysisResults && selectedTickerIndex !== null && (
+                <>
+                  <Box sx={{ position: 'relative', height: 600, mb: 2 }}>
+                    {/* Simplified to only render the selected ticker chart */}
+                    {selectedTickerIndex !== null && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                        }}
+                      >
+                        <TickerChart
+                          ticker={analysisResults.tickers[selectedTickerIndex]}
+                          prediction={analysisResults.predictions[selectedTickerIndex]}
+                          color={selectedTickerColor}
+                          onPrev={handlePrevTicker}
+                          onNext={handleNextTicker}
+                          isPrevDisabled={selectedTickerIndex === 0}
+                          isNextDisabled={
+                            analysisResults &&
+                            selectedTickerIndex === analysisResults.tickers.length - 1
+                          }
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                </>
+              )}
+
+              <AnalysisGrid
+                analysisResults={analysisResults}
+                selectedTickerIndex={selectedTickerIndex}
+                onSelectTicker={handleTickerSelect}
+              />
+            </Box>
+          </Paper>
+        </Box>
+      </Box>
     </Box>
   );
 }
