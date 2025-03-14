@@ -13,7 +13,8 @@ function TickerChart({
   onPrev,
   onNext,
   isPrevDisabled,
-  isNextDisabled
+  isNextDisabled,
+  onSaveToggle
 }) {
   const container = useRef();
   
@@ -25,8 +26,10 @@ function TickerChart({
   const handleSaveStock = () => {
     if (isSaved) {
       removeStock(ticker);
+      if (onSaveToggle) onSaveToggle(ticker, false);
     } else {
       addStock(ticker);
+      if (onSaveToggle) onSaveToggle(ticker, true);
     }
   };
 
@@ -190,32 +193,40 @@ function TickerChart({
             gap: 0.5,
             pr: 1,
           }}>
-            <IconButton 
-              onClick={onPrev} 
-              disabled={isPrevDisabled}
-              size="small"
-              sx={{
-                backgroundColor: 'rgba(255,255,255,0.8)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,1)',
-                },
-              }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-            <IconButton 
-              onClick={onNext} 
-              disabled={isNextDisabled}
-              size="small"
-              sx={{
-                backgroundColor: 'rgba(255,255,255,0.8)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,1)',
-                },
-              }}
-            >
-              <ArrowForwardIcon />
-            </IconButton>
+            <Tooltip title="Previous stock (← Left arrow)">
+              <span>
+                <IconButton 
+                  onClick={onPrev} 
+                  disabled={isPrevDisabled}
+                  size="small"
+                  sx={{
+                    backgroundColor: 'rgba(255,255,255,0.8)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,1)',
+                    },
+                  }}
+                >
+                  <ArrowBackIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Next stock (→ Right arrow)">
+              <span>
+                <IconButton 
+                  onClick={onNext} 
+                  disabled={isNextDisabled}
+                  size="small"
+                  sx={{
+                    backgroundColor: 'rgba(255,255,255,0.8)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,1)',
+                    },
+                  }}
+                >
+                  <ArrowForwardIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Box>
         </Box>
       </Box>

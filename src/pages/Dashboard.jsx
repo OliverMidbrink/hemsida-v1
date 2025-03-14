@@ -1,8 +1,9 @@
-import { Typography, Box, Paper, FormControl, InputLabel, Select, MenuItem, Grid, useTheme, alpha, List, ListItem, ListItemText, Divider, Chip, IconButton, Collapse, Fade, Tooltip } from '@mui/material';
-import { useState, useEffect } from 'react';
+import { Typography, Box, Paper, FormControl, InputLabel, Select, MenuItem, Grid, useTheme, alpha, List, ListItem, ListItemText, Divider, Chip, IconButton, Collapse, Fade, Tooltip, Snackbar, Alert, Button } from '@mui/material';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import TickerChart from '../components/TickerChart';
 import AnalysisGrid from '../components/dashboard/AnalysisGrid';
+import StockSearch from '../components/dashboard/StockSearch';
 import useAuthStore from '../stores/authStore';
 import useSavedStocksStore from '../stores/savedStocksStore';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -46,7 +47,7 @@ function Dashboard() {
   const user = useAuthStore(state => state.user);
   
   // Get saved stocks from store
-  const { savedStocks, removeStock } = useSavedStocksStore();
+  const { savedStocks, removeStock, addStock, isStockSaved } = useSavedStocksStore();
   
   // Extract username from email or use "Guest" if not logged in
   const getUsernameFromEmail = () => {
@@ -98,6 +99,15 @@ function Dashboard() {
       selectedTickerColor = getBackgroundColor(analysisResults.predictions[selectedTickerIndex]);
   }
 
+  // Add state for feedback messages
+  const [feedbackMessage, setFeedbackMessage] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  
+  // Add state for undo functionality
+  const [lastAction, setLastAction] = useState(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const undoTimeoutRef = useRef(null);
+
   useEffect(() => {
     const fetchAnalysis = async () => {
       setLoadingAnalysis(true);
@@ -142,6 +152,136 @@ function Dashboard() {
     }
   };
 
+  // Function to handle stock saving
+  const handleSaveStock = (ticker) => {
+    if (!isStockSaved(ticker)) {
+      // Save previous state for undo
+      setLastAction({
+        type: 'add',
+        ticker
+      });
+      
+      // Add the stock
+      addStock(ticker);
+      
+      // Show feedback
+      setFeedbackMessage(`Added ${ticker} to saved stocks`);
+      setShowFeedback(true);
+      setCanUndo(true);
+      
+      // Set timeout for undo availability
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+      
+      undoTimeoutRef.current = setTimeout(() => {
+        setCanUndo(false);
+        setLastAction(null);
+      }, 8000); // 8 seconds
+    }
+  };
+
+  // Function to handle stock removal
+  const handleRemoveStock = (ticker) => {
+    if (isStockSaved(ticker)) {
+      // Save previous state for undo
+      setLastAction({
+        type: 'remove',
+        ticker
+      });
+      
+      // Remove the stock
+      removeStock(ticker);
+      
+      // Show feedback
+      setFeedbackMessage(`Removed ${ticker} from saved stocks`);
+      setShowFeedback(true);
+      setCanUndo(true);
+      
+      // Set timeout for undo availability
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+      
+      undoTimeoutRef.current = setTimeout(() => {
+        setCanUndo(false);
+        setLastAction(null);
+      }, 8000); // 8 seconds
+    }
+  };
+
+  // Function to handle undo
+  const handleUndo = () => {
+    if (lastAction && canUndo) {
+      if (lastAction.type === 'add') {
+        // Undo add by removing
+        removeStock(lastAction.ticker);
+        setFeedbackMessage(`Undid adding ${lastAction.ticker}`);
+      } else if (lastAction.type === 'remove') {
+        // Undo remove by adding
+        addStock(lastAction.ticker);
+        setFeedbackMessage(`Undid removing ${lastAction.ticker}`);
+      }
+      
+      setShowFeedback(true);
+      setCanUndo(false);
+      setLastAction(null);
+      
+      // Clear the timeout
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
+      }
+    }
+  };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Keyboard navigation handler
+  const handleKeyDown = useCallback((event) => {
+    // Skip keyboard shortcuts if the search input or any other input is focused
+    if (event.target.tagName === 'INPUT' || 
+        event.target.tagName === 'TEXTAREA' || 
+        event.target.isContentEditable) {
+      return;
+    }
+    
+    if (event.key === 'ArrowLeft') {
+      handlePrevTicker();
+    } else if (event.key === 'ArrowRight') {
+      handleNextTicker();
+    } else if (event.key === 'Enter' && analysisResults && selectedTickerIndex !== null) {
+      // Save current stock on Enter key
+      const currentTicker = analysisResults.tickers[selectedTickerIndex];
+      handleSaveStock(currentTicker);
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && analysisResults && selectedTickerIndex !== null) {
+      // Remove current stock from saved on Delete or Backspace key
+      const currentTicker = analysisResults.tickers[selectedTickerIndex];
+      handleRemoveStock(currentTicker);
+    } else if (event.key === 'z' && event.ctrlKey && canUndo) {
+      // Undo with Ctrl+Z
+      handleUndo();
+      event.preventDefault();
+    }
+  }, [selectedTickerIndex, analysisResults, canUndo]);
+
+  // Add keyboard event listener
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Clean up event listener on component unmount
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
   // When user clicks a grid cell, select that ticker
   const handleTickerSelect = (idx) => {
     setSelectedTickerIndex(idx);
@@ -163,6 +303,20 @@ function Dashboard() {
       const index = analysisResults.tickers.findIndex(t => t === ticker);
       if (index !== -1) {
         setSelectedTickerIndex(index);
+        setFeedbackMessage(`Viewing ${ticker}`);
+        setShowFeedback(true);
+      }
+    }
+  };
+
+  // Handle selecting a stock from search
+  const handleSearchSelectStock = (ticker) => {
+    if (analysisResults) {
+      const index = analysisResults.tickers.findIndex(t => t === ticker);
+      if (index !== -1) {
+        setSelectedTickerIndex(index);
+        setFeedbackMessage(`Viewing ${ticker}`);
+        setShowFeedback(true);
       }
     }
   };
@@ -170,12 +324,17 @@ function Dashboard() {
   // Handle removing a saved stock
   const handleRemoveSavedStock = (ticker, event) => {
     event.stopPropagation(); // Prevent triggering the ListItem click
-    removeStock(ticker);
+    handleRemoveStock(ticker);
   };
 
   // Toggle saved stocks panel expansion
   const toggleSavedStocksExpanded = () => {
     setSavedStocksExpanded(prev => !prev);
+  };
+
+  // Handle closing the feedback
+  const handleCloseFeedback = () => {
+    setShowFeedback(false);
   };
 
   return (
@@ -228,6 +387,17 @@ function Dashboard() {
                 <MenuItem value="asia" disabled>Asian Market (Coming Soon)</MenuItem>
               </Select>
             </FormControl>
+          </Grid>
+          <Grid item xs={12}>
+            <Box sx={{ mt: 2 }}>
+              <StockSearch 
+                onSelectTicker={handleSearchSelectStock} 
+                availableTickers={analysisResults ? analysisResults.tickers : []}
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Search for stocks by ticker symbol (e.g., AAPL, MSFT, GOOGL)
+              </Typography>
+            </Box>
           </Grid>
         </Grid>
       </Paper>
@@ -389,7 +559,7 @@ function Dashboard() {
                       {savedStocks.slice(0, 5).map((ticker) => (
                         <Tooltip key={ticker} title={ticker} placement="right">
                           <Chip
-                            label={ticker.slice(0, 1)}
+                            label={ticker.substring(0, 3)}
                             size="small"
                             color={analysisResults && selectedTickerIndex !== null && 
                                   analysisResults.tickers[selectedTickerIndex] === ticker ? "primary" : "default"}
@@ -450,6 +620,109 @@ function Dashboard() {
 
               {analysisResults && selectedTickerIndex !== null && (
                 <>
+                  {/* Large navigation buttons above the chart */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    mb: 2,
+                    gap: 2
+                  }}>
+                    <Box 
+                      component="button"
+                      onClick={handlePrevTicker}
+                      disabled={selectedTickerIndex === 0}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1.5,
+                        flex: 1,
+                        py: 2,
+                        px: 3,
+                        backgroundColor: theme.palette.background.paper,
+                        color: selectedTickerIndex === 0 ? theme.palette.text.disabled : theme.palette.text.primary,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                        borderRadius: 1.5,
+                        cursor: selectedTickerIndex === 0 ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        '&:hover': {
+                          backgroundColor: selectedTickerIndex === 0 ? theme.palette.background.paper : alpha(theme.palette.primary.main, 0.05),
+                          borderColor: selectedTickerIndex === 0 ? alpha(theme.palette.divider, 0.8) : theme.palette.primary.main,
+                          boxShadow: selectedTickerIndex === 0 ? '0 1px 3px rgba(0,0,0,0.1)' : '0 3px 6px rgba(0,0,0,0.15)',
+                          transform: selectedTickerIndex === 0 ? 'none' : 'translateY(-2px)',
+                        },
+                        '&:focus': {
+                          outline: 'none',
+                          boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}`,
+                        }
+                      }}
+                    >
+                      <ChevronLeftIcon fontSize="medium" />
+                      <Typography variant="button" sx={{ fontWeight: 500, fontSize: '0.95rem' }}>Previous Stock</Typography>
+                    </Box>
+                    
+                    {/* Stock position indicator */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      px: 2,
+                      minWidth: '120px'
+                    }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {selectedTickerIndex + 1} of {analysisResults.tickers.length}
+                      </Typography>
+                    </Box>
+                    
+                    <Box 
+                      component="button"
+                      onClick={handleNextTicker}
+                      disabled={analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1.5,
+                        flex: 1,
+                        py: 2,
+                        px: 3,
+                        backgroundColor: theme.palette.background.paper,
+                        color: (analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1) 
+                          ? theme.palette.text.disabled 
+                          : theme.palette.text.primary,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                        borderRadius: 1.5,
+                        cursor: (analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1) 
+                          ? 'not-allowed' 
+                          : 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        '&:hover': {
+                          backgroundColor: (analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1)
+                            ? theme.palette.background.paper 
+                            : alpha(theme.palette.primary.main, 0.05),
+                          borderColor: (analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1)
+                            ? alpha(theme.palette.divider, 0.8) 
+                            : theme.palette.primary.main,
+                          boxShadow: (analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1) 
+                            ? '0 1px 3px rgba(0,0,0,0.1)' 
+                            : '0 3px 6px rgba(0,0,0,0.15)',
+                          transform: (analysisResults && selectedTickerIndex === analysisResults.tickers.length - 1) 
+                            ? 'none' 
+                            : 'translateY(-2px)',
+                        },
+                        '&:focus': {
+                          outline: 'none',
+                          boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}`,
+                        }
+                      }}
+                    >
+                      <Typography variant="button" sx={{ fontWeight: 500, fontSize: '0.95rem' }}>Next Stock</Typography>
+                      <ChevronRightIcon fontSize="medium" />
+                    </Box>
+                  </Box>
+
                   <Box sx={{ position: 'relative', height: 600, mb: 2 }}>
                     {/* Simplified to only render the selected ticker chart */}
                     {selectedTickerIndex !== null && (
@@ -473,9 +746,29 @@ function Dashboard() {
                             analysisResults &&
                             selectedTickerIndex === analysisResults.tickers.length - 1
                           }
+                          onSaveToggle={(ticker, isSaved) => {
+                            if (isSaved) {
+                              handleSaveStock(ticker);
+                            } else {
+                              handleRemoveStock(ticker);
+                            }
+                          }}
                         />
                       </Box>
                     )}
+                  </Box>
+                  
+                  {/* Keyboard navigation hint */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    mb: 2,
+                    opacity: 0.7
+                  }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Tip: Use ← → arrow keys to navigate between stocks | Enter to save | Delete/Backspace to remove from saved | Ctrl+Z to undo
+                    </Typography>
                   </Box>
                 </>
               )}
@@ -489,6 +782,28 @@ function Dashboard() {
           </Paper>
         </Box>
       </Box>
+
+      {/* Feedback Snackbar */}
+      <Snackbar
+        open={showFeedback}
+        autoHideDuration={6000}
+        onClose={handleCloseFeedback}
+      >
+        <Alert 
+          onClose={handleCloseFeedback} 
+          severity="success" 
+          sx={{ width: '100%' }}
+          action={
+            canUndo && (
+              <Button color="inherit" size="small" onClick={handleUndo}>
+                UNDO
+              </Button>
+            )
+          }
+        >
+          {feedbackMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
