@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import useSavedStocksStore from '../stores/savedStocksStore';
+
+// Cache for chart instances
+const chartCache = new Map();
 
 function TickerChart({
   ticker,
@@ -33,30 +36,69 @@ function TickerChart({
     }
   };
 
-  // Embed or re-embed TradingView chart in the container
-  useEffect(() => {
-    if (!container.current) return;
-    container.current.innerHTML = '';
+  // Create or get cached chart instance
+  const chartInstance = useMemo(() => {
+    if (!ticker) return null;
+    
+    // If we already have a chart instance for this ticker, return it
+    if (chartCache.has(ticker)) {
+      return chartCache.get(ticker);
+    }
+
+    // Create new chart instance
     const script = document.createElement('script');
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
     script.async = true;
+    
     const widgetConfig = {
       autosize: true,
-      symbol: ticker || 'NASDAQ:AAPL',
+      symbol: ticker,
       interval: 'D',
       timezone: 'Etc/UTC',
       theme: 'light',
       style: '1',
+      withdateranges: true,
+      details: true,
+      show_popup_button: true,
+      popup_width: 1000,
+      popup_height: 600,
       locale: 'en',
       hide_volume: true,
       allow_symbol_change: true,
+      hide_side_toolbar: false,
       calendar: false,
       support_host: 'https://www.tradingview.com',
     };
+    
     script.innerHTML = JSON.stringify(widgetConfig, null, 2);
-    container.current.appendChild(script);
+    
+    // Cache the script element
+    chartCache.set(ticker, script);
+    return script;
   }, [ticker]);
+
+  // Embed or re-embed TradingView chart in the container
+  useEffect(() => {
+    if (!container.current || !chartInstance) return;
+    
+    // Clear container
+    container.current.innerHTML = '';
+    
+    // Clone the cached script to avoid DOM node reuse issues
+    const scriptClone = chartInstance.cloneNode(true);
+    container.current.appendChild(scriptClone);
+  }, [chartInstance]);
+
+  // Clean up chart cache when component unmounts
+  useEffect(() => {
+    return () => {
+      // Only remove from cache if the stock is not saved
+      if (!isSaved) {
+        chartCache.delete(ticker);
+      }
+    };
+  }, [ticker, isSaved]);
 
   // The outer container with fixed row direction (side menu always on right)
   return (
